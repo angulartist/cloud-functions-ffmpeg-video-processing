@@ -37,7 +37,10 @@ export const generateVideo = functions.https.onCall(async data => {
       destination: tmpFontFilePath
     })
   } catch (error) {
-    throw new Error(`Error on getting font: ${error}`)
+    throw new functions.https.HttpsError(
+      'unavailable',
+      `Failed to download font: ${error}`
+    )
   }
 
   // Download the original clip
@@ -46,7 +49,10 @@ export const generateVideo = functions.https.onCall(async data => {
       destination: tmpFilePath
     })
   } catch (error) {
-    throw new Error(`Error on getting clip: ${error}`)
+    throw new functions.https.HttpsError(
+      'unavailable',
+      `Failed to download clip: ${error}`
+    )
   }
 
   // Make a read stream of the clip
@@ -86,11 +92,17 @@ export const generateVideo = functions.https.onCall(async data => {
           resumable: false
         })
       } catch (error) {
-        throw new Error(`Error on uploading processed clip: ${error}`)
+        throw new functions.https.HttpsError(
+          'data-loss',
+          `Failed to upload processed clip: ${error}`
+        )
       }
     })
     .on('error', ({ message }) => {
-      throw new Error(`Error while processing the video: ${message}`)
+      throw new functions.https.HttpsError(
+        'unknown',
+        `An error has occured while processing the clip: ${message}`
+      )
     })
     .save(tmpProcessingPath)
 })

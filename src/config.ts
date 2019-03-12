@@ -10,5 +10,5 @@ export const timestamp: FirebaseFirestore.FieldValue = admin.firestore.FieldValu
 
 // Storage
 export const gcs = new storage.Storage()
-export const bucketName = functions.config().bucket.name
+export const bucketName = functions.config().bucket.name // You'll never get my fucking bucket name bro'
 export const processedClipsPath = 'processed_clips'
