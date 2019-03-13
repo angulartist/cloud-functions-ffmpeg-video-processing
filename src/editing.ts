@@ -1,108 +1,118 @@
 import * as functions from 'firebase-functions'
-import { gcs, processedClipsPath, bucketName } from './config'
-import { assert } from './helpers'
+import { processedClipsPath, opts, bucket, runOpts, db } from './config'
+import { STATE } from './models/state'
 
-// #
-import * as fs from 'fs-extra'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-// ffmpeg
 import * as ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import * as FfmpegCommand from 'fluent-ffmpeg'
 FfmpegCommand.setFfmpegPath(ffmpegPath.path)
 
-export const generateVideo = functions.https.onCall(async data => {
-  // Getting text data
-  const text = assert(data, 'text')
-
-  // Setting up the bucket
-  const bucket = gcs.bucket(bucketName)
-
-  // Set the original clip path in the /tmp/ directory
-  const tmpFilePath = join(tmpdir(), 'rave.mp4')
-
-  // Set the font file (.ttf) in the /tmp/ directory
-  const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
-
-  // Set a temp name for the manipulated clip
-  const processedFileName = 'processed_' + Math.random() + '_rave.mp4'
-
-  // Set up them path
-  const tmpProcessingPath = join(tmpdir(), processedFileName)
-
-  // Downloading the font
+/**
+ * Upload the processed clip.
+ * @param path Processed clip path under /tmp/ directory
+ * @param destination Storage bucket path directory
+ */
+const uploadClip = async (path: string, destination: string) => {
   try {
-    await bucket.file('fonts/Gobold_Bold.ttf').download({
-      destination: tmpFontFilePath
+    await bucket.upload(path, {
+      destination,
+      resumable: false
     })
   } catch (error) {
-    throw new functions.https.HttpsError(
-      'unavailable',
-      `Failed to download font: ${error}`
-    )
+    throw new Error(error)
   }
+}
 
-  // Download the original clip
+/**
+ * Download a file from the bucket @cloud/storage.
+ * @param path Storage bucket path directory
+ * @param destination File path under /tmp/ directory
+ */
+const downloadFile = async (path: string, destination: string) => {
   try {
-    await bucket.file('templates/rave.mp4').download({
-      destination: tmpFilePath
+    await bucket.file(path).download({
+      destination
     })
   } catch (error) {
-    throw new functions.https.HttpsError(
-      'unavailable',
-      `Failed to download clip: ${error}`
-    )
+    throw new Error(error)
   }
+}
 
-  // Make a read stream of the clip
-  const fileStream = fs.createReadStream(tmpFilePath)
-
-  // Video filter options...
-  const options = {
-    fontfile: tmpFontFilePath,
-    text,
-    fontsize: 80,
-    fontcolor: 'white',
-    x: '(main_w/2-text_w/2)',
-    y: '(main_h/2-text_h/2)',
-    shadowcolor: 'black',
-    shadowx: 2,
-    shadowy: 2
+/**
+ * Update state of a clip doc...
+ * @param ref Reference to the clip document
+ * @param state Given state
+ */
+const updateDoc = async (
+  ref: FirebaseFirestore.DocumentReference,
+  state: STATE,
+  link: string = 'URL'
+) => {
+  try {
+    return await ref.update({ state, link })
+  } catch (error) {
+    throw new Error(error)
   }
+}
 
-  // Set a new ffmpeg command (fuking any type needed atm)
-  const cmd = FfmpegCommand(fileStream) as any
+/**
+ * Bullshit.
+ * @param clipPath Path of the processed clip
+ */
+export const generateLink = clipPath => {
+  if (!clipPath) throw new Error('No clip path found!')
+  return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o%2F${clipPath}?alt=media`
+}
 
-  // Using drawText filter to add the user's text...
-  cmd
-    .videoFilters({
-      filter: 'drawtext',
-      options
-    })
-    .on('end', async () => {
-      // Cool, set the processed clip path in the bucket
-      const destination = `${processedClipsPath}/processed_clip_${Math.random() *
-        100}.mp4`
+export const generateVideo = functions
+  .runWith(runOpts)
+  .firestore.document('clips/{clipId}')
+  .onCreate(async (snapShot, context) => {
+    const clipRef = db.doc(`clips/${context.params.clipId}`)
 
-      // Uploading the processed clip!
-      try {
-        await bucket.upload(tmpProcessingPath, {
-          destination,
-          resumable: false
+    const snapData = snapShot.data()
+
+    const { text } = snapData
+
+    const tmpFilePath = join(tmpdir(), 'rave.mp4')
+
+    const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
+
+    const processedFileName = 'processed_' + Math.random() + '_rave.mp4'
+
+    const tmpProcessingPath = join(tmpdir(), processedFileName)
+
+    const command = FfmpegCommand(tmpFilePath) as any
+
+    await updateDoc(clipRef, STATE.GETTING_CLIP)
+
+    await downloadFile('fonts/Gobold_Bold.ttf', tmpFontFilePath)
+
+    await downloadFile('templates/rave.mp4', tmpFilePath)
+
+    await updateDoc(clipRef, STATE.PROCESSING)
+
+    await new Promise((resolve, reject) => {
+      command
+        .videoFilters({
+          filter: 'drawtext',
+          options: { fontfile: tmpFontFilePath, text, ...opts }
         })
-      } catch (error) {
-        throw new functions.https.HttpsError(
-          'data-loss',
-          `Failed to upload processed clip: ${error}`
-        )
-      }
+        .on('end', async () => {
+          const dest = `${processedClipsPath}/processed_clip_${Math.random() *
+            100}.mp4`
+
+          await updateDoc(clipRef, STATE.UPLOADING)
+
+          await uploadClip(tmpProcessingPath, dest)
+
+          return resolve(updateDoc(clipRef, STATE.DONE, generateLink(dest)))
+        })
+        .on('error', () => {
+          return reject(updateDoc(clipRef, STATE.ERROR))
+        })
+        .save(tmpProcessingPath)
     })
-    .on('error', ({ message }) => {
-      throw new functions.https.HttpsError(
-        'unknown',
-        `An error has occured while processing the clip: ${message}`
-      )
-    })
-    .save(tmpProcessingPath)
-})
+  })

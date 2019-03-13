@@ -1,0 +1,8 @@
+export enum STATE {
+  STARTED,
+  GETTING_CLIP,
+  PROCESSING,
+  UPLOADING,
+  DONE,
+  ERROR
+}
