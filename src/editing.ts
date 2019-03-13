@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions'
-import { processedClipsPath, opts, bucket, runOpts, db } from './config'
+import { processedClipsPath, opts, bucket, runOpts, db, fs } from './config'
 import { STATE } from './models/state'
 
 import { tmpdir } from 'os'
@@ -58,12 +58,27 @@ const updateDoc = async (
 }
 
 /**
+ * Archive FFmpeg logs
+ * @param ref Reference to the clip document
+ * @param entry FFmpeg generaated logs
+ */
+const log = async (ref: FirebaseFirestore.DocumentReference, entry: Object) => {
+  try {
+    await ref.update({
+      logs: fs.FieldValue.arrayUnion(entry)
+    })
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
  * Bullshit.
  * @param clipPath Path of the processed clip
  */
-export const generateLink = clipPath => {
+const generateLink = clipPath => {
   if (!clipPath) throw new Error('No clip path found!')
-  return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o%2F${clipPath}?alt=media`
+  return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipPath}?alt=media`
 }
 
 export const generateVideo = functions
@@ -76,11 +91,11 @@ export const generateVideo = functions
 
     const { text } = snapData
 
-    const tmpFilePath = join(tmpdir(), 'rave.mp4')
+    const tmpFilePath = join(tmpdir(), 'rave_.mp4')
 
     const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
 
-    const processedFileName = 'processed_' + Math.random() + '_rave.mp4'
+    const processedFileName = 'processed_' + Math.random() + '_rave_.mp4'
 
     const tmpProcessingPath = join(tmpdir(), processedFileName)
 
@@ -90,7 +105,7 @@ export const generateVideo = functions
 
     await downloadFile('fonts/Gobold_Bold.ttf', tmpFontFilePath)
 
-    await downloadFile('templates/rave.mp4', tmpFilePath)
+    await downloadFile('templates/rave_.mp4', tmpFilePath)
 
     await updateDoc(clipRef, STATE.PROCESSING)
 
@@ -99,6 +114,9 @@ export const generateVideo = functions
         .videoFilters({
           filter: 'drawtext',
           options: { fontfile: tmpFontFilePath, text, ...opts }
+        })
+        .on('progress', progress => {
+          log(clipRef, progress)
         })
         .on('end', async () => {
           const dest = `${processedClipsPath}/processed_clip_${Math.random() *

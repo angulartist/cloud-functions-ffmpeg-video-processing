@@ -7,6 +7,7 @@ admin.initializeApp()
 
 // Firestore
 export const db = admin.firestore()
+export const fs = admin.firestore
 db.settings({ timestampsInSnapshots: true })
 export const timestamp: FirebaseFirestore.FieldValue = admin.firestore.FieldValue.serverTimestamp()
 
