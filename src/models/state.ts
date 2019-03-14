@@ -3,6 +3,7 @@ export enum STATE {
   GETTING_CLIP,
   PROCESSING,
   UPLOADING,
+  BUILD_LINK,
   DONE,
   ERROR
 }

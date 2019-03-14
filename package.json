@@ -18,12 +18,14 @@
     "@sendgrid/mail": "^6.3.1",
     "@types/fluent-ffmpeg": "^2.1.9",
     "@types/fs-extra": "^5.0.4",
+    "axios": "^0.18.0",
     "caman": "^4.1.2",
     "firebase-admin": "~6.0.0",
     "firebase-functions": "^2.2.0",
     "fluent-ffmpeg": "^2.1.2",
     "fs-extra": "^7.0.1",
-    "stripe": "^6.25.1"
+    "stripe": "^6.25.1",
+    "to-streamable": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^3.2.2"

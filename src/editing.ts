@@ -1,13 +1,16 @@
 import * as functions from 'firebase-functions'
-import { processedClipsPath, opts, bucket, runOpts, db, fs } from './config'
-import { STATE } from './models/state'
+import { processedClipsPath, opts, bucket, runOpts, db } from './config'
 
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import * as ffmpegPath from '@ffmpeg-installer/ffmpeg'
 import * as FfmpegCommand from 'fluent-ffmpeg'
+import { shortUrl } from './api'
 FfmpegCommand.setFfmpegPath(ffmpegPath.path)
+
+// Models
+import { STATE } from './models/state'
 
 /**
  * Upload the processed clip.
@@ -48,7 +51,7 @@ const downloadFile = async (path: string, destination: string) => {
 const updateDoc = async (
   ref: FirebaseFirestore.DocumentReference,
   state: STATE,
-  link: string = 'URL'
+  link: string = 'NO_URL_YET'
 ) => {
   try {
     return await ref.update({ state, link })
@@ -58,29 +61,19 @@ const updateDoc = async (
 }
 
 /**
- * Archive FFmpeg logs
- * @param ref Reference to the clip document
- * @param entry FFmpeg generaated logs
- */
-const log = async (ref: FirebaseFirestore.DocumentReference, entry: Object) => {
-  try {
-    await ref.update({
-      logs: fs.FieldValue.arrayUnion(entry)
-    })
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
-/**
- * Bullshit.
+ * Why the fuck is so complicated to generate a signed link via the admin SDK @Google ? Please...
+ * Have to write this horse shit.
  * @param clipPath Path of the processed clip
  */
 const generateLink = clipPath => {
   if (!clipPath) throw new Error('No clip path found!')
-  return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipPath}?alt=media`
+  const clipName = clipPath.split('/').pop()
+  return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipName}?alt=media`
 }
 
+/**
+ * Main function.
+ */
 export const generateVideo = functions
   .runWith(runOpts)
   .firestore.document('clips/{clipId}')
@@ -89,7 +82,7 @@ export const generateVideo = functions
 
     const snapData = snapShot.data()
 
-    const { text } = snapData
+    const { text /* templateId */ } = snapData
 
     const tmpFilePath = join(tmpdir(), 'rave_.mp4')
 
@@ -115,18 +108,19 @@ export const generateVideo = functions
           filter: 'drawtext',
           options: { fontfile: tmpFontFilePath, text, ...opts }
         })
-        .on('progress', progress => {
-          log(clipRef, progress)
-        })
         .on('end', async () => {
-          const dest = `${processedClipsPath}/processed_clip_${Math.random() *
+          const destination = `${processedClipsPath}/processed_clip_${Math.random() *
             100}.mp4`
 
           await updateDoc(clipRef, STATE.UPLOADING)
 
-          await uploadClip(tmpProcessingPath, dest)
+          await uploadClip(tmpProcessingPath, destination)
 
-          return resolve(updateDoc(clipRef, STATE.DONE, generateLink(dest)))
+          await updateDoc(clipRef, STATE.BUILD_LINK)
+
+          const clipLink = await shortUrl(generateLink(destination))
+
+          return resolve(updateDoc(clipRef, STATE.DONE, clipLink))
         })
         .on('error', () => {
           return reject(updateDoc(clipRef, STATE.ERROR))
