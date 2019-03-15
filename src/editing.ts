@@ -1,5 +1,12 @@
 import * as functions from 'firebase-functions'
-import { processedClipsPath, opts, bucket, runOpts, db } from './config'
+import {
+  processedClipsPath,
+  opts,
+  bucket,
+  runOpts,
+  db,
+  timestamp
+} from './config'
 
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -51,10 +58,11 @@ const downloadFile = async (path: string, destination: string) => {
 const updateDoc = async (
   ref: FirebaseFirestore.DocumentReference,
   state: STATE,
-  link: string = 'NO_URL_YET'
+  link: string = 'NO_URL_YET',
+  createdAt = timestamp
 ) => {
   try {
-    return await ref.update({ state, link })
+    return await ref.update({ state, link, createdAt })
   } catch (error) {
     throw new Error(error)
   }
@@ -82,13 +90,25 @@ export const generateVideo = functions
 
     const snapData = snapShot.data()
 
-    const { text /* templateId */ } = snapData
+    const { text, tpl } = snapData
 
-    const tmpFilePath = join(tmpdir(), 'rave_.mp4')
+    const template = {
+      0() {
+        return 'rave_.mp4'
+      },
+      1() {
+        return 'retro_.mp4'
+      },
+      2() {
+        return 'monkeys.mp4'
+      }
+    }[tpl]()
+
+    const tmpFilePath = join(tmpdir(), template)
 
     const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
 
-    const processedFileName = 'processed_' + Math.random() + '_rave_.mp4'
+    const processedFileName = `processed_${Math.random()}_${template}`
 
     const tmpProcessingPath = join(tmpdir(), processedFileName)
 
@@ -98,7 +118,7 @@ export const generateVideo = functions
 
     await downloadFile('fonts/Gobold_Bold.ttf', tmpFontFilePath)
 
-    await downloadFile('templates/rave_.mp4', tmpFilePath)
+    await downloadFile(`templates/${template}`, tmpFilePath)
 
     await updateDoc(clipRef, STATE.PROCESSING)
 
