@@ -81,6 +81,20 @@ const generateLink = clipPath => {
   return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipName}?alt=media`
 }
 
+const textLength = (text: string): number => {
+  return text.length
+}
+
+const fontSize = (length: number): number => {
+  if (length <= 10) {
+    return 150
+  } else if (length > 10 && length <= 17) {
+    return 105
+  } else {
+    return 80
+  }
+}
+
 /**
  * Main function.
  */
@@ -132,7 +146,12 @@ export const generateVideo = functions
       command
         .videoFilters({
           filter: 'drawtext',
-          options: { fontfile: tmpFontFilePath, text, ...opts }
+          options: {
+            fontfile: tmpFontFilePath,
+            fontsize: fontSize(textLength(text)),
+            text,
+            ...opts
+          }
         })
         .outputOptions('-preset superfast')
         .on('end', async () => {
