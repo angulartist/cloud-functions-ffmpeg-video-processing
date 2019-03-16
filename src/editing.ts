@@ -5,7 +5,8 @@ import {
   bucket,
   runOpts,
   db,
-  timestamp
+  timestamp,
+  watchEndpoint
 } from './config'
 
 import { tmpdir } from 'os'
@@ -58,11 +59,12 @@ const downloadFile = async (path: string, destination: string) => {
 const updateDoc = async (
   ref: FirebaseFirestore.DocumentReference,
   state: STATE,
+  bucketLink: string = 'NO_URL_YET',
   link: string = 'NO_URL_YET',
   createdAt = timestamp
 ) => {
   try {
-    return await ref.update({ state, link, createdAt })
+    return await ref.update({ state, bucketLink, link, createdAt })
   } catch (error) {
     throw new Error(error)
   }
@@ -86,7 +88,11 @@ export const generateVideo = functions
   .runWith(runOpts)
   .firestore.document('clips/{clipId}')
   .onCreate(async (snapShot, context) => {
-    const clipRef = db.doc(`clips/${context.params.clipId}`)
+    const { clipId } = context.params
+
+    const watchPath = watchEndpoint.concat(clipId)
+
+    const clipRef = db.doc(`clips/${clipId}`)
 
     const snapData = snapShot.data()
 
@@ -128,6 +134,7 @@ export const generateVideo = functions
           filter: 'drawtext',
           options: { fontfile: tmpFontFilePath, text, ...opts }
         })
+        .outputOptions('-preset superfast')
         .on('end', async () => {
           const destination = `${processedClipsPath}/processed_clip_${Math.random() *
             100}.mp4`
@@ -138,9 +145,11 @@ export const generateVideo = functions
 
           await updateDoc(clipRef, STATE.BUILD_LINK)
 
-          const clipLink = await shortUrl(generateLink(destination))
+          const clipLink = await shortUrl(watchPath)
 
-          return resolve(updateDoc(clipRef, STATE.DONE, clipLink))
+          return resolve(
+            updateDoc(clipRef, STATE.DONE, generateLink(destination), clipLink)
+          )
         })
         .on('error', () => {
           return reject(updateDoc(clipRef, STATE.ERROR))

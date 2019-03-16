@@ -25,6 +25,7 @@ export const bucket = gcs.bucket(bucketName)
 // ShortLink
 export const apikey = functions.config().shortlink.apikey
 export const workspace = functions.config().shortlink.workspace
+export const watchEndpoint = 'https://bonobo.team/v/'
 
 // FFmpeg
 export const cmd = FfmpegCommand.setFfmpegPath(ffmpegPath.path)
