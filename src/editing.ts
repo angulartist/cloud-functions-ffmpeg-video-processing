@@ -1,7 +1,6 @@
 import * as functions from 'firebase-functions'
 import {
   processedClipsPath,
-  opts,
   bucket,
   runOpts,
   db,
@@ -9,6 +8,7 @@ import {
   watchEndpoint
 } from './config'
 
+import * as fs from 'fs-extra'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -19,6 +19,7 @@ FfmpegCommand.setFfmpegPath(ffmpegPath.path)
 
 // Models
 import { STATE } from './models/state'
+import { TPL } from './models/template'
 
 /**
  * Upload the processed clip.
@@ -81,19 +82,35 @@ const generateLink = clipPath => {
   return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipName}?alt=media`
 }
 
-const textLength = (text: string): number => {
-  return text.length
+const makeSrt = async (text: string): Promise<void> => {
+  const content = `1
+00:00:00,000 --> 00:00:100,000
+${text}`
+
+  await new Promise((resolve, reject) => {
+    fs.writeFile(join(tmpdir(), 'text.srt'), content, err => {
+      if (err) {
+        reject(err)
+      } else resolve()
+    })
+  })
 }
 
-const fontSize = (length: number): number => {
-  if (length <= 10) {
-    return 120
-  }
-  if (length > 10 && length <= 16) {
-    return 70
-  } else {
-    return 50
-  }
+const selectedTemplate = (tpl: TPL) => {
+  return {
+    0() {
+      return 'rave_.mp4'
+    },
+    1() {
+      return 'retro_.mp4'
+    },
+    2() {
+      return 'monkeys.mp4'
+    },
+    3() {
+      return 'blackman.mp4'
+    }
+  }[tpl]()
 }
 
 /**
@@ -113,21 +130,13 @@ export const generateVideo = functions
 
     const { text, tpl } = snapData
 
-    const template = {
-      0() {
-        return 'rave_.mp4'
-      },
-      1() {
-        return 'retro_.mp4'
-      },
-      2() {
-        return 'monkeys.mp4'
-      }
-    }[tpl]()
+    const template = selectedTemplate(tpl)
 
     const tmpFilePath = join(tmpdir(), template)
 
     const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
+
+    const tmpSrtPath = join(tmpdir(), 'text.srt')
 
     const processedFileName = `processed_${Math.random()}_${template}`
 
@@ -143,18 +152,14 @@ export const generateVideo = functions
 
     await updateDoc(clipRef, STATE.PROCESSING)
 
+    await makeSrt(text)
+
     await new Promise((resolve, reject) => {
       command
-        .videoFilters({
-          filter: 'drawtext',
-          options: {
-            fontfile: tmpFontFilePath,
-            fontsize: fontSize(textLength(text)),
-            text,
-            ...opts
-          }
-        })
-        .outputOptions('-preset superfast')
+        .outputOptions([
+          `-vf subtitles=${tmpSrtPath}:force_style='Alignment=10,Fontsize=70`,
+          '-preset superfast'
+        ])
         .on('end', async () => {
           const destination = `${processedClipsPath}/processed_clip_${Math.random() *
             100}.mp4`

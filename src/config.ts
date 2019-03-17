@@ -29,14 +29,3 @@ export const watchEndpoint = 'https://bonobo.team/v/'
 
 // FFmpeg
 export const cmd = FfmpegCommand.setFfmpegPath(ffmpegPath.path)
-
-// @ Video process options
-export const opts = {
-  fontcolor: 'white',
-  x: '(main_w/2-text_w/2)',
-  y: '(main_h/2-text_h/2)',
-  enable: 'lt(mod(t,0.5), 0.3)',
-  shadowcolor: 'pink',
-  shadowx: 4,
-  shadowy: 4
-}
