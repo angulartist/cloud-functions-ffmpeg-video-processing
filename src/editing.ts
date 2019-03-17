@@ -21,6 +21,8 @@ FfmpegCommand.setFfmpegPath(ffmpegPath.path)
 import { STATE } from './models/state'
 import { TPL } from './models/template'
 
+const tmpSrtPath = join(tmpdir(), 'text.srt')
+
 /**
  * Upload the processed clip.
  * @param path Processed clip path under /tmp/ directory
@@ -82,13 +84,17 @@ const generateLink = clipPath => {
   return `https://firebasestorage.googleapis.com/v0/b/notbanana-7f869.appspot.com/o/processed_clips%2F${clipName}?alt=media`
 }
 
+/**
+ * Make a new srt file.
+ * @param text Text to send
+ */
 const makeSrt = async (text: string): Promise<void> => {
   const content = `1
 00:00:00,000 --> 00:00:100,000
 ${text}`
 
   await new Promise((resolve, reject) => {
-    fs.writeFile(join(tmpdir(), 'text.srt'), content, err => {
+    fs.writeFile(tmpSrtPath, content, err => {
       if (err) {
         reject(err)
       } else resolve()
@@ -135,8 +141,6 @@ export const generateVideo = functions
     const tmpFilePath = join(tmpdir(), template)
 
     const tmpFontFilePath = join(tmpdir(), 'Gobold_Bold.ttf')
-
-    const tmpSrtPath = join(tmpdir(), 'text.srt')
 
     const processedFileName = `processed_${Math.random()}_${template}`
 
