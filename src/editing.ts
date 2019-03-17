@@ -87,11 +87,12 @@ const textLength = (text: string): number => {
 
 const fontSize = (length: number): number => {
   if (length <= 10) {
-    return 150
-  } else if (length > 10 && length <= 17) {
-    return 105
+    return 120
+  }
+  if (length > 10 && length <= 16) {
+    return 70
   } else {
-    return 80
+    return 50
   }
 }
 
