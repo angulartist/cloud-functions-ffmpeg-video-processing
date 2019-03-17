@@ -1,13 +1,18 @@
-import * as functions from 'firebase-functions'
+import { TPL } from './models/template'
 
-// Check if data object contain any valid key/value pair
-export const assert = (data: any, key: string) => {
-  if (!data[key]) {
-    throw new functions.https.HttpsError(
-      'invalid-argument',
-      `function called without ${key} data`
-    )
-  } else {
-    return data[key]
-  }
+export const selectedTemplate = (tpl: TPL) => {
+  return {
+    0() {
+      return 'rave_.mp4'
+    },
+    1() {
+      return 'retro_.mp4'
+    },
+    2() {
+      return 'monkeys.mp4'
+    },
+    3() {
+      return 'blackman.mp4'
+    }
+  }[tpl]()
 }

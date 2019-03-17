@@ -19,7 +19,7 @@ FfmpegCommand.setFfmpegPath(ffmpegPath.path)
 
 // Models
 import { STATE } from './models/state'
-import { TPL } from './models/template'
+import { selectedTemplate } from './helpers'
 
 const tmpSrtPath = join(tmpdir(), 'text.srt')
 
@@ -100,23 +100,6 @@ ${text}`
       } else resolve()
     })
   })
-}
-
-const selectedTemplate = (tpl: TPL) => {
-  return {
-    0() {
-      return 'rave_.mp4'
-    },
-    1() {
-      return 'retro_.mp4'
-    },
-    2() {
-      return 'monkeys.mp4'
-    },
-    3() {
-      return 'blackman.mp4'
-    }
-  }[tpl]()
 }
 
 /**
