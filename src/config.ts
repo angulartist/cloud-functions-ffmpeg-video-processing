@@ -10,6 +10,9 @@ export const db = admin.firestore()
 db.settings({ timestampsInSnapshots: true })
 export const timestamp: FirebaseFirestore.FieldValue = admin.firestore.FieldValue.serverTimestamp()
 
+// Firebase
+export const fb = admin.database()
+
 // Functions
 export const runOpts: {
   timeoutSeconds: number

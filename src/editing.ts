@@ -5,7 +5,8 @@ import {
   runOpts,
   db,
   timestamp,
-  watchEndpoint
+  watchEndpoint,
+  fb
 } from './config'
 
 import * as fs from 'fs-extra'
@@ -32,6 +33,7 @@ const uploadClip = async (path: string, destination: string) => {
   try {
     await bucket.upload(path, {
       destination,
+      //  /tmp/.config, is not writable
       resumable: false
     })
   } catch (error) {
@@ -90,8 +92,12 @@ const generateLink = clipPath => {
  */
 const makeSrt = async (text: string): Promise<void> => {
   const content = `1
-00:00:00,000 --> 00:00:100,000
-${text}`
+00:00:00,000 --> 00:00:15,000
+${text}
+
+2
+00:00:15,000 --> 00:00:100,000
+bonobo.team`
 
   await new Promise((resolve, reject) => {
     fs.writeFile(tmpSrtPath, content, err => {
@@ -100,6 +106,10 @@ ${text}`
       } else resolve()
     })
   })
+}
+
+const freeDiskSpace = (...paths: string[]) => {
+  paths.forEach(path => fs.unlinkSync(path))
 }
 
 /**
@@ -147,6 +157,16 @@ export const generateVideo = functions
           `-vf subtitles=${tmpSrtPath}:force_style='Alignment=10,Fontsize=70`,
           '-preset superfast'
         ])
+        .on('start', () => {
+          fb.ref('clips/' + clipId).set({
+            progress: 0
+          })
+        })
+        .on('progress', async progress => {
+          await fb.ref('clips/' + clipId).set({
+            progress
+          })
+        })
         .on('end', async () => {
           const destination = `${processedClipsPath}/processed_clip_${Math.random() *
             100}.mp4`
@@ -158,6 +178,13 @@ export const generateVideo = functions
           await updateDoc(clipRef, STATE.BUILD_LINK)
 
           const clipLink = await shortUrl(watchPath)
+
+          freeDiskSpace(
+            tmpProcessingPath,
+            tmpFilePath,
+            tmpFontFilePath,
+            tmpSrtPath
+          )
 
           return resolve(
             updateDoc(clipRef, STATE.DONE, generateLink(destination), clipLink)
